@@ -5,9 +5,9 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 
-// import routers from own files
-const placesRouters = require("./routes/places-routes");
-const usersRouters = require("./routes/users-routes");
+const placesRoutes = require("./routes/places-routes");
+const usersRoutes = require("./routes/users-routes");
+const HttpError = require("./models/http-error");
 
 const HttpError = require("./models/http-error");
 
@@ -33,8 +33,8 @@ app.use((req, res, next) => {
 });
 
 // we need to make sure express only reach this middleware when request start as api/places
-app.use("/api/places", placesRouters); // this is simply become a middleware
-app.use("/api/users", usersRouters);
+app.use("/api/places", placesRoutes);
+app.use("/api/users", usersRoutes);
 
 // this middleware is only reached if we have some request which didn't get a response before
 // that can be a request we don't want to handle
