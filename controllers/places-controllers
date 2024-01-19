@@ -1,0 +1,253 @@
+// this controller functions file is to look at middileware function logic
+
+const fs = require("fs");
+
+const HttpError = require("../models/http-error");
+const getCoordsForAddress = require("../util/location");
+const Place = require("../models/place");
+const User = require("../models/user");
+
+// third party package which is capable of generating unique IDs
+const { v4: uuidv4 } = require("uuid");
+const mongoose = require("mongoose");
+
+const { validationResult } = require("express-validator");
+
+// (req, res, next): aruguments/functions that should be excute when a request reaches this route
+// meaning: when we get a request to "/", we need to excute req, res, and next.
+const getPlaceById = async (req, res, next) => {
+  // note: dynamic url ":pid" also include empty ""
+  // get concreate id from url
+  const placeId = req.params.pid;
+
+  let place;
+  try {
+    place = await Place.findById(placeId);
+  } catch (err) {
+    const error = new HttpError(
+      // Error 1: DB request error
+      "Something went wrong, could not find a place.",
+      500
+    );
+    return next(error);
+  }
+
+  // error message if nothing found
+  if (!place) {
+    // Error 2: no such place in DB
+    const error = new HttpError(
+      "Could not find a place for the provided id. ",
+      404
+    );
+    return next(error);
+  }
+
+  // turn mongoose object into a normal JS object
+  // get rid of the underscore _ before Id by setting getter to true
+  // ({ ...user._doc, id: user._id }) will work in the same way
+  res.json({ place: place.toObject({ getters: true }) });
+};
+
+const getPlacesByUserId = async (req, res, next) => {
+  const userId = req.params.uid;
+
+  let places;
+  try {
+    places = await Place.find({ creator: userId }); // must refer to a property
+  } catch (err) {
+    const error = new HttpError(
+      "Fetching places failed, please try again.",
+      500
+    );
+    return next(error);
+  }
+
+  if (!places || places.length === 0) {
+    return next(
+      new HttpError("Could not find a place for the provided user id. ", 404)
+    );
+  }
+
+  res.json({
+    // find() returns an array, so we need to use .map() to turn object one by one
+    places: places.map((place) => place.toObject({ getters: true })),
+  });
+};
+
+// adding async keyword to be a async function
+// async function should use return next instead of throw
+const createPlace = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return next(new HttpError("Invalid inputs passed.", 422));
+  }
+
+  // javascript default object destructuring
+  // another way of: const title = req.body.title;
+  const { title, description, address, creator } = req.body;
+
+  // use Google Geocoding API to find the coordinates
+  let coordinates;
+  try {
+    coordinates = await getCoordsForAddress(address); // wait for the promise
+  } catch (error) {
+    // If the promise is rejected (e.g., the API call fails),
+    // it catches the error and passes it to the error-handling middleware.
+    return next(error);
+  }
+
+  // create the model object
+  const createdPlace = new Place({
+    title,
+    description,
+    address,
+    location: coordinates,
+    image: req.file.path,
+    creator: req.userData.userId,
+  });
+
+  // check if the certain user exist
+  let user;
+  try {
+    user = await User.findById(req.userData.userId);
+  } catch (err) {
+    const error = new HttpError(
+      "Creating place failed, please try again.",
+      500
+    );
+    return next(error);
+  }
+  if (!user) {
+    // if user doesnt exist
+    const error = new HttpError("Could not find the user for provided id", 404);
+    return next(error);
+  }
+
+  console.log(user);
+
+  // 1. store or create that new doc with our new place
+  // 2. add the place Id into the corresponding user
+  // If one of each operations fails, undo all operation
+  try {
+    const sess = await mongoose.startSession(); // create a session
+    sess.startTransaction(); // in current session, start a transaction
+    await createdPlace.save({ session: sess }); // save place into DB, provide a session property
+    user.places.push(createdPlace); // mongoose push feature, grab the place id and adds to the place field of user
+    await user.save({ session: sess });
+    await sess.commitTransaction(); // only if we come to this process, the change can really saved in DB
+    // if any error above, all steps would have been rolled back by mongoDB
+  } catch (err) {
+    const error = new HttpError(
+      "Creating place failed, please try again.",
+      500
+    );
+    return next(error);
+  }
+  // status 201: if something was successfully created on the server
+  res.status(201).json({ place: createdPlace });
+};
+
+const updatePlace = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    console.log(errors);
+    return next(new HttpError("Invalid inputs passed.", 422));
+  }
+  // get new titile and description from request body
+  const { title, description } = req.body;
+  // get place id from URL
+  const placeId = req.params.pid; // api/places/:pid
+
+  let place;
+  try {
+    place = await Place.findById(placeId);
+  } catch (err) {
+    const error = new HttpError(
+      "Something went wrong, could not update place",
+      500
+    );
+    return next(error);
+  }
+
+  if (place.creator.toString() !== req.userData.userId) {
+    const error = new HttpError("You are not allowed to edit this place.", 401);
+    return next(error);
+  }
+
+  // update the new copyed object first, then replace old object by updated object
+  place.title = title;
+  place.description = description;
+
+  try {
+    await place.save();
+  } catch (err) {
+    const error = new HttpError(
+      "Something went wrong, could not update place!!",
+      500
+    );
+    return next(error);
+  }
+  // status 200: action successful
+  // not 201 because we didn't add new thing on the server
+  res.status(200).json({ place: place.toObject({ getters: true }) });
+};
+
+const deletePlace = async (req, res, next) => {
+  // find the id of current place that you want to delete from URL
+  const placeId = req.params.pid;
+  // if (!DUMMY_PLACES.find((p) => p.id === placeId)) {
+  //   throw new HttpError("Could not find a place for that id", 404);
+  // }
+  let place;
+  try {
+    place = await Place.findById(placeId).populate("creator"); // take this id and search for entire user data
+  } catch (err) {
+    const error = new HttpError(
+      "Something went wrong, could not delete place!",
+      500
+    );
+    return next(error);
+  }
+
+  if (!place) {
+    const error = new HttpError("Could not find place for this id", 404);
+    return next(error);
+  }
+
+  if (place.creator.id !== req.userData.userId) {
+    const error = new HttpError(
+      "You are not allowed to delete this place.",
+      401
+    );
+  }
+
+  const imagePath = place.image;
+
+  try {
+    const sess = await mongoose.startSession();
+    sess.startTransaction();
+    await place.deleteOne({ session: sess });
+    place.creator.places.pull(place);
+    await place.creator.save({ session: sess });
+    await sess.commitTransaction();
+  } catch (err) {
+    const error = new HttpError(
+      "Something went wrong, could not delete the place.",
+      500
+    );
+    return next(error);
+  }
+
+  fs.unlink(imagePath, (err) => {
+    console.log(err);
+  });
+
+  res.status(200).json({ message: "Place deleted." });
+};
+
+// module.export = : only allowed to export a single thing
+exports.getPlaceById = getPlaceById; // export a poiinter to that function instead of excute it with ()
+exports.getPlacesByUserId = getPlacesByUserId;
+exports.createPlace = createPlace;
+exports.updatePlace = updatePlace;
+exports.deletePlace = deletePlace;
