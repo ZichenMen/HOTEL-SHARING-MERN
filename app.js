@@ -9,8 +9,6 @@ const placesRoutes = require("./routes/places-routes");
 const usersRoutes = require("./routes/users-routes");
 const HttpError = require("./models/http-error");
 
-const HttpError = require("./models/http-error");
-
 // init app object
 const app = express();
 
