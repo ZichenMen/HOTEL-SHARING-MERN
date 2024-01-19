@@ -36,10 +36,10 @@ app.use("/api/users", usersRoutes);
 
 // this middleware is only reached if we have some request which didn't get a response before
 // that can be a request we don't want to handle
-// app.use((req, res, next) => {
-//   const error = new HttpError("Could not find this route.", 404);
-//   throw error;
-// });
+app.use((req, res, next) => {
+  const error = new HttpError("Could not find this route.", 404);
+  throw error;
+});
 
 app.use((error, req, res, next) => {
   if (req.file) {
