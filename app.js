@@ -62,8 +62,7 @@ mongoose
     `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@refresher.ccp8yfv.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`
   )
   .then(() => {
-    // app.listen(process.env.PORT || 5000, "0.0.0.0");
-    app.listen(5000);
+    app.listen(process.env.PORT || 5000, "0.0.0.0");
   })
   .catch((err) => {
     console.log(err);
