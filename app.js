@@ -59,7 +59,7 @@ app.use((error, req, res, next) => {
 // start the connection, if connected, listen on certain port
 mongoose
   .connect(
-    `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@refresher.ccp8yfv.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`
+    `mongodb+srv://Summer:u3Drf0TR1jbg7sPH@refresher.ccp8yfv.mongodb.net/mern?retryWrites=true&w=majority`
   )
   .then(() => {
     app.listen(process.env.PORT || 5000, "0.0.0.0");
@@ -67,3 +67,4 @@ mongoose
   .catch((err) => {
     console.log(err);
   });
+
