@@ -11,5 +11,5 @@ This project is a comprehensive Full-stack Web Application designed to provide a
 - **Backend**: Node.js, Express.js
 - **Database**: MongoDB Atlas
 - **APIs**: RESTful APIs for seamless data exchange between frontend and backend.
-- **Deployment**: Firebase for frontend, Railway backend.
+- **Deployment**: Firebase for frontend, Railway for backend.
 
